@@ -14,27 +14,30 @@ if uploaded_file:
     df = pd.read_excel(uploaded_file)
     df.columns = df.columns.str.strip()
 
-    # Check if PLMN column exists
+    st.write("📋 Columns found in file:", df.columns.tolist())  # Debug
+
+    # Flexible detection of PLMN column
     plmn_col = None
     for col in df.columns:
-        if col.upper() == "PLMN":
+        if "plmn" in col.lower():
             plmn_col = col
             break
 
     rf_columns = [col for col in df.columns if col.upper() in ["RSRP", "RSSI", "RSRQ", "SINR"]]
+
     if not {"Latitude", "Longitude"}.issubset(df.columns) or not rf_columns:
         st.error("❌ File must contain 'Latitude', 'Longitude' and at least one RF parameter like RSRP, RSSI, RSRQ, or SINR.")
     else:
-        # 🆕 Multi-PLMN Filter
-        if plmn_col:
+        if plmn_col and not df[plmn_col].dropna().empty:
             unique_plmns = sorted(df[plmn_col].dropna().astype(str).unique())
-            selected_plmns = st.sidebar.multiselect("🔍 Filter by PLMN(s)", unique_plmns, default=unique_plmns)
-
-            if selected_plmns:
-                df = df[df[plmn_col].astype(str).isin(selected_plmns)]
-            else:
-                st.warning("⚠️ No PLMN selected. No data will be shown.")
-                st.stop()
+            st.write("📶 Unique PLMN values found:", unique_plmns)
+            selected_plmn = st.sidebar.selectbox("🔍 Filter by PLMN (optional)", ["All"] + list(unique_plmns))
+            if selected_plmn != "All":
+                df = df[df[plmn_col].astype(str) == selected_plmn]
+        elif plmn_col:
+            st.warning("⚠️ PLMN column exists but contains no valid values.")
+        else:
+            st.info("ℹ️ No PLMN column detected.")
 
         selected_param = st.selectbox("📈 Select RF Parameter to Visualize", rf_columns)
 
@@ -43,9 +46,8 @@ if uploaded_file:
         max_val = float(df[selected_param].max())
 
         st.sidebar.header("⚡ Filter RF Values")
-
-        # 🎛️ Custom range presets
         preset = st.sidebar.radio("Range Preset", ["All", "Excellent", "Good", "Fair", "Poor"])
+
         if selected_param.upper() == "RSRP":
             thresholds = {"Excellent": (-80, max_val), "Good": (-90, -80), "Fair": (-100, -90), "Poor": (min_val, -100)}
         elif selected_param.upper() == "RSRQ":
@@ -71,7 +73,6 @@ if uploaded_file:
 
         st.success(f"✅ {len(df_filtered)} data points within selected range.")
 
-        # 📊 Histogram
         st.sidebar.markdown(f"### 📊 {selected_param} Histogram")
         fig, ax = plt.subplots()
         df_filtered[selected_param].hist(bins=20, ax=ax, color="skyblue", edgecolor="black")
@@ -80,7 +81,6 @@ if uploaded_file:
         ax.set_ylabel("Frequency")
         st.sidebar.pyplot(fig)
 
-        # 🧮 Summary
         st.sidebar.markdown(f"**Average {selected_param}:** {df_filtered[selected_param].mean():.2f}")
         st.sidebar.markdown(f"**Strongest:** {df_filtered[selected_param].max():.2f}")
         st.sidebar.markdown(f"**Weakest:** {df_filtered[selected_param].min():.2f}")
