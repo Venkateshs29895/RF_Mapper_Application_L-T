@@ -25,11 +25,16 @@ if uploaded_file:
     if not {"Latitude", "Longitude"}.issubset(df.columns) or not rf_columns:
         st.error("❌ File must contain 'Latitude', 'Longitude' and at least one RF parameter like RSRP, RSSI, RSRQ, or SINR.")
     else:
+        # 🆕 Multi-PLMN Filter
         if plmn_col:
             unique_plmns = sorted(df[plmn_col].dropna().astype(str).unique())
-            selected_plmn = st.sidebar.selectbox("🔍 Filter by PLMN (optional)", ["All"] + unique_plmns)
-            if selected_plmn != "All":
-                df = df[df[plmn_col].astype(str) == selected_plmn]
+            selected_plmns = st.sidebar.multiselect("🔍 Filter by PLMN(s)", unique_plmns, default=unique_plmns)
+
+            if selected_plmns:
+                df = df[df[plmn_col].astype(str).isin(selected_plmns)]
+            else:
+                st.warning("⚠️ No PLMN selected. No data will be shown.")
+                st.stop()
 
         selected_param = st.selectbox("📈 Select RF Parameter to Visualize", rf_columns)
 
